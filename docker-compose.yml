@@ -1,8 +1,6 @@
 # 4thwall WAF - Docker Compose
 # Nginx (WAF) + FastAPI + Dashboard frontend + optional DVWA
 
-version: "3.8"
-
 services:
   api:
     build:
@@ -12,8 +10,10 @@ services:
       - "8000:8000"
     environment:
       - MODEL_PATH=./models/waf_model
+      - DECISION_LOG=/app/logs/decision_log.json
     volumes:
       - ./models:/app/models:ro
+      - ./logs:/app/logs:ro
     restart: unless-stopped
 
   frontend:
@@ -27,11 +27,14 @@ services:
     restart: unless-stopped
 
   nginx:
-    image: nginx:alpine
+    image: owasp/modsecurity-crs:nginx
     ports:
       - "80:80"
+    environment:
+      # If the image supports it, proxy to DVWA (otherwise image uses its default)
+      - BACKEND=http://dvwa:80
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Do not mount over /etc/nginx/nginx.conf - image entrypoint must write it
       - ./logs:/var/log/nginx
     depends_on:
       - dvwa

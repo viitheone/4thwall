@@ -9,6 +9,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.dashboard import router as dashboard_router
 from api.schemas import BatchScoreRequest, BatchScoreResponse, ScoreRequest, ScoreResponse
 from ml.infer import WAFClassifier
 
@@ -27,6 +28,8 @@ app.add_middleware(
 
 classifier: WAFClassifier | None = None
 
+app.include_router(dashboard_router)
+
 
 @app.on_event("startup")
 def startup():
@@ -38,6 +41,7 @@ def startup():
     else:
         classifier = None
         logger.warning("Model path %s not found; /score endpoints will return 503", model_path)
+    app.state.waf_classifier = classifier
 
 
 @app.get("/health")
