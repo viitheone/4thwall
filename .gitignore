@@ -1,0 +1,66 @@
+############################
+# Python / Backend
+############################
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.python-version
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+############################
+# Node / Frontend (public/)
+############################
+node_modules/
+public/node_modules/
+public/dist/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+############################
+# Models & data artifacts
+############################
+models/
+!models/.gitkeep
+data/
+!data/.gitkeep
+
+############################
+# Logs & runtime output
+############################
+logs/
+*.log
+*.tmp
+*.pid
+
+############################
+# Environment / secrets
+############################
+.env
+.env.*
+!*.example
+
+############################
+# OS / Editor / Tooling
+############################
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Cursor / editor metadata
+.cursor/
+agent-transcripts/
+
