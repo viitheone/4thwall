@@ -118,12 +118,14 @@ Run the full stack (API, dashboard frontend, Nginx WAF, and optional DVWA) with 
    ```
 
 3. **Access the stack:**
-   | Service        | URL                      |
-   |----------------|--------------------------|
-   | **Dashboard UI** | http://localhost:3000   |
-   | **WAF API**     | http://localhost:8000   |
-   | **Nginx (WAF)** | http://localhost:80     |
-   | **DVWA**        | http://localhost:8080   |
+   | Service        | URL                      | Notes |
+   |----------------|--------------------------|--------|
+   | **Dashboard UI** | http://localhost:3000   | Proxies `/api` → WAF API |
+   | **WAF API**     | http://localhost:8000   | Open `/health` and `/docs` |
+   | **Nginx (WAF)** | http://localhost:80     | **Use this** to hit DVWA *through* ModSecurity (traffic is logged to `logs/access.log`). |
+   | **DVWA (direct)** | http://localhost:8080 | Bypasses the WAF container — requests **do not** appear in `logs/access.log`. |
+
+   The **`log-worker`** service tails `logs/access.log`, calls `/score`, and appends `logs/decision_log.json` so the **dashboard** shows traffic. It starts after the API is healthy (~model load).
 
 4. **Useful commands:**
    - View logs: `docker compose logs -f`
@@ -155,12 +157,17 @@ Run the full stack (API, dashboard frontend, Nginx WAF, and optional DVWA) with 
 - **Import errors**: Run from project root and ensure `requirements.txt` is installed.
 - **Nginx not starting**: Check paths in `nginx.conf` (e.g. `logs/` relative to Nginx prefix). Create `logs` directory if needed.
 - **Empty decision log**: Ensure `logs/access.log` exists and has lines in the expected JSON format.
+- **Port 80 or 8000 not loading**: Run `docker compose ps` — all services should be `Up`. The CRS **nginx** image listens on **8080 inside the container**; compose maps **host `80` → container `8080`**. If you mapped `80:80` by mistake, nothing listens and the browser hangs. For the API, open `http://localhost:8000/health` (JSON). If **nginx** is restarting, run `docker compose logs nginx --tail 80`.
+- **Nginx `Restarting` + bind-mount conf**: If `nginx/conf.d/99-waf-host-access-log.conf` **did not exist** the first time you ran Compose, Docker may have created a **directory** with that name. Nginx then fails. Remove that folder, ensure the path is a **regular file** (see repo), then `docker compose up -d --force-recreate nginx`.
+- **Dashboard empty**: Traffic must go through **http://localhost:80** (WAF), not **:8080** (direct DVWA). Ensure `log-worker` is running; it writes `logs/decision_log.json`. Check `docker compose logs -f log-worker`.
+- **“WAF doesn’t block”**: **ModSecurity** can block at the proxy (compose sets `MODSEC_RULE_ENGINE=On`). The **ML model is not inline with Nginx** — it only runs in the API when `log-worker` / `demo.py` scores log lines. Obvious CRS matches (e.g. SQLi probes) should still get **403** from ModSecurity when score ≥ anomaly threshold.
 - **Docker – dashboard can’t reach API**: Ensure both `api` and `frontend` services are running; the frontend proxies `/api` to the API container. Run `docker compose ps` to confirm.
 - **Docker – API has no model**: Train locally first so `./models/waf_model` exists, then start with `docker compose up`; the compose file mounts `./models` into the API container.
+- **Docker build: `Read timed out` / huge `nvidia-*` / `cudnn` downloads**: PyPI’s default Linux `torch` wheel includes CUDA and is multi‑GB. The API image installs **CPU-only** PyTorch from PyTorch’s wheel index first (see `Dockerfile.api`). If a build still times out, retry `docker compose build --no-cache api` or use a faster network; local `pip install -r requirements.txt` is unchanged.
 
 ## Limitations
 
 - No online learning; model is fixed after training.
-- ModSecurity in config is detection-only (no blocking) for demo.
+- Docker Compose sets **`MODSEC_RULE_ENGINE=On`** on the CRS nginx proxy; local `nginx/nginx.conf` samples may still be detection-only if you run Nginx manually.
 - Policy engine has exactly the specified rules (ModSec block, then ML thresholds 0.9 / 0.6).
 - Demo assumes ModSecurity blocked flag is false when not integrated with a real ModSec audit log.

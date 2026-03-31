@@ -1,7 +1,20 @@
 FROM python:3.11-slim
 WORKDIR /app
+
+# Install CPU-only PyTorch first from PyTorch's index. Default PyPI `torch` pulls huge
+# CUDA/cu12 wheels (~2GB+) and often hits ReadTimeoutError during `docker build`.
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+      --default-timeout=300 --retries=10 \
+      torch --index-url https://download.pytorch.org/whl/cpu
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# requirements.txt still lists torch for local installs; skip it here (already CPU torch).
+RUN grep -v '^torch' requirements.txt > /tmp/requirements-no-torch.txt && \
+    pip install --no-cache-dir \
+      --default-timeout=300 --retries=10 \
+      -r /tmp/requirements-no-torch.txt
+
 COPY . .
 ENV PYTHONPATH=/app
 EXPOSE 8000

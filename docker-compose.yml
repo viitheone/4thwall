@@ -14,6 +14,36 @@ services:
     volumes:
       - ./models:/app/models:ro
       - ./logs:/app/logs:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    restart: unless-stopped
+
+  # Tails logs/access.log, calls /score, appends logs/decision_log.json (dashboard reads this).
+  log-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    command: ["python", "-u", "docker_log_worker.py"]
+    environment:
+      NGINX_ACCESS_LOG: /app/logs/access.log
+      DECISION_LOG: /app/logs/decision_log.json
+      WORKER_OFFSET_FILE: /app/logs/.waf_log_worker_offset
+      WAF_API_URL: http://api:8000
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -28,14 +58,23 @@ services:
 
   nginx:
     image: owasp/modsecurity-crs:nginx
+    # Windows bind mounts are often root-owned; nginx user can't create access.log without this (dev-only).
+    user: "0:0"
     ports:
-      - "80:80"
+      # CRS nginx listens on 8080 inside the container (unprivileged image default), not 80.
+      - "80:8080"
     environment:
-      # If the image supports it, proxy to DVWA (otherwise image uses its default)
+      # Reverse-proxy to DVWA; ModSecurity inspects traffic before it reaches the backend.
       - BACKEND=http://dvwa:80
+      # Explicit blocking mode (default is On; set DetectionOnly if you only want logs).
+      - MODSEC_RULE_ENGINE=On
+      # Slightly easier to trigger blocks on obvious attack probes (optional; raise for production).
+      - ANOMALY_INBOUND=4
     volumes:
-      # Do not mount over /etc/nginx/nginx.conf - image entrypoint must write it
-      - ./logs:/var/log/nginx
+      # Host logs only under /waf — mounting over ALL of /var/log/nginx makes
+      # /var/log/nginx/error.log unwritable for the non-root nginx user (Windows bind mounts).
+      - ./logs:/var/log/nginx/waf
+      - ./nginx/conf.d/99-waf-host-access-log.conf:/etc/nginx/conf.d/99-waf-host-access-log.conf:ro
     depends_on:
       - dvwa
     restart: unless-stopped

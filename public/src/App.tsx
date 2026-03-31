@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useCallback,
   useMemo,
   useState,
 } from 'react';
@@ -33,6 +34,9 @@ import {
   Cell,
 } from 'recharts';
 
+const REFRESH_INTERVAL_MS = 1000;
+const TRAFFIC_PANEL_HEIGHT = 'h-[30rem]';
+
 function useDashboardData() {
   const [summary, setSummary] = useState<SummaryStats | null>(null);
   const [traffic, setTraffic] = useState<LiveTrafficEntry[]>([]);
@@ -41,58 +45,47 @@ function useDashboardData() {
   const [topAttackers, setTopAttackers] = useState<TopAttacker[]>([]);
   const [aiStatus, setAiStatus] = useState<AiModelStatus | null>(null);
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const [s, d, h, t, a] = await Promise.all([
-          fetchSummaryStats(),
-          fetchAttackDistribution(),
-          fetchAttacksByHour(),
-          fetchTopAttackers(),
-          fetchAiModelStatus(),
-        ]);
-        setSummary(s);
-        setDistribution(d);
-        setByHour(h);
-        setTopAttackers(t);
-        setAiStatus(a);
-      } catch {
-        // handled by individual UI fallbacks
-      }
-    })();
+  const refreshAll = useCallback(async () => {
+    try {
+      const [s, d, h, t, a, live] = await Promise.all([
+        fetchSummaryStats(),
+        fetchAttackDistribution(),
+        fetchAttacksByHour(),
+        fetchTopAttackers(),
+        fetchAiModelStatus(),
+        fetchLiveTraffic(),
+      ]);
+      setSummary(s);
+      setDistribution(d);
+      setByHour(h);
+      setTopAttackers(t);
+      setAiStatus(a);
+      setTraffic(live);
+    } catch {
+      // keep previous successful state on transient polling failures
+    }
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const data = await fetchLiveTraffic();
-        if (!cancelled) {
-          setTraffic(data);
-        }
-      } catch {
-        // ignore polling errors for now
-      } finally {
-        if (!cancelled) {
-          setTimeout(poll, 5000);
-        }
-      }
-    };
-    void poll();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    void refreshAll();
+    const id = setInterval(() => {
+      void refreshAll();
+    }, REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [refreshAll]);
 
   return { summary, traffic, distribution, byHour, topAttackers, aiStatus };
 }
 
 const ATTACK_COLORS = [
-  '#eae0d5',
-  'rgba(234,224,213,0.75)',
-  'rgba(234,224,213,0.55)',
-  'rgba(234,224,213,0.35)',
-  'rgba(234,224,213,0.2)',
+  '#ef4444',
+  '#f97316',
+  '#eab308',
+  '#22c55e',
+  '#06b6d4',
+  '#3b82f6',
+  '#a855f7',
+  '#ec4899',
 ];
 
 function App() {
@@ -168,7 +161,7 @@ function App() {
           <div className="card-header">
             <h2 className="text-sm font-semibold text-panel">Live Traffic Monitor</h2>
           </div>
-          <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+          <div className={`${TRAFFIC_PANEL_HEIGHT} space-y-2 overflow-y-auto pr-1 custom-scrollbar`}>
             {traffic.map((entry) => (
               <LiveTrafficRow key={entry.id} entry={entry} />
             ))}
@@ -188,15 +181,31 @@ function App() {
                 <PieChart>
                   <Pie
                     dataKey="count"
+                    nameKey="type"
                     data={distribution}
                     innerRadius={50}
                     outerRadius={80}
                     paddingAngle={3}
+                    labelLine={false}
+                    label={({ cx, cy, midAngle, outerRadius, percent }) => {
+                      const radius = (outerRadius ?? 80) + 16;
+                      const x = (cx ?? 0) + radius * Math.cos((-midAngle * Math.PI) / 180);
+                      const y = (cy ?? 0) + radius * Math.sin((-midAngle * Math.PI) / 180);
+                      return (
+                        <text x={x} y={y} fill="#eae0d5" fontSize={11} textAnchor={x > (cx ?? 0) ? 'start' : 'end'}>
+                          {`${((percent ?? 0) * 100).toFixed(0)}%`}
+                        </text>
+                      );
+                    }}
                   >
                     {distribution.map((_, index) => (
                       <Cell key={index} fill={ATTACK_COLORS[index % ATTACK_COLORS.length]} />
                     ))}
                   </Pie>
+                  <Legend
+                    formatter={(value) => <span style={{ color: '#eae0d5' }}>{value}</span>}
+                    wrapperStyle={{ fontSize: 11 }}
+                  />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: '#0a0908',
@@ -290,7 +299,11 @@ function App() {
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="count" name="Malicious attempts" fill="#eae0d5" />
+                  <Bar dataKey="count" name="Malicious attempts">
+                    {byHour.map((_, index) => (
+                      <Cell key={`hour-cell-${index}`} fill={ATTACK_COLORS[index % ATTACK_COLORS.length]} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
