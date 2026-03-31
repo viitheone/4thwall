@@ -18,6 +18,16 @@ class WAFClassifier:
         self.model.to(self.device)
         self.model.eval()
 
+        self.metrics = None
+        import os, json
+        metrics_file = os.path.join(model_path, "metrics.json")
+        if os.path.exists(metrics_file):
+            try:
+                with open(metrics_file, "r") as f:
+                    self.metrics = json.load(f)
+            except Exception:
+                pass
+
     def predict(self, request_text: str) -> dict:
         """
         Args:

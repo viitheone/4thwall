@@ -148,14 +148,16 @@ def get_ai_status(request: Request):
     """AI model status for dashboard; uses app state if available."""
     classifier = getattr(request.app.state, "waf_classifier", None)
     loaded = classifier is not None
+    metrics = getattr(classifier, "metrics", None) if loaded else None
+    
     return {
         "architecture": "DistilBERT" if loaded else "N/A",
         "version": "1.0",
         "parameters": "WAF classifier",
         "trainingProgress": 100 if loaded else 0,
-        "accuracy": 0.0,
-        "precision": 0.0,
-        "recall": 0.0,
-        "f1": 0.0,
+        "accuracy": metrics["accuracy"] if metrics else 0.0,
+        "precision": metrics["precision"] if metrics else 0.0,
+        "recall": metrics["recall"] if metrics else 0.0,
+        "f1": metrics["f1"] if metrics else 0.0,
         "lastUpdated": "2026-02-01T00:00:00Z",
     }

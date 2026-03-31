@@ -42,7 +42,7 @@ export function LiveTrafficRow({ entry }: Props) {
             <span className="text-[11px] text-panel/70">
               AI Confidence:{' '}
               <span className="font-semibold">
-                {entry.aiConfidence.toFixed(1)}
+                {(entry.aiConfidence * 100).toFixed(1)}
                 %
               </span>
             </span>

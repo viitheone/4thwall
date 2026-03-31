@@ -88,6 +88,14 @@ const ATTACK_COLORS = [
   '#ec4899',
 ];
 
+const formatHourString = (val: string) => {
+  if (!val || typeof val !== 'string' || !val.includes('T')) return val;
+  const [datePart, hourPart] = val.split('T');
+  const [, month, day] = datePart.split('-');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[parseInt(month, 10) - 1]} ${parseInt(day, 10)}, ${hourPart}:00`;
+};
+
 function App() {
   const { summary, traffic, distribution, byHour, topAttackers, aiStatus } = useDashboardData();
 
@@ -152,7 +160,7 @@ function App() {
               </span>
             </div>
             <p className="text-2xl font-semibold text-panel">
-              {summary ? `${summary.accuracy.toFixed(2)}%` : '--'}
+              {summary ? `${(summary.accuracy * 100).toFixed(2)}%` : '--'}
             </p>
           </div>
         </section>
@@ -206,14 +214,6 @@ function App() {
                     formatter={(value) => <span style={{ color: '#eae0d5' }}>{value}</span>}
                     wrapperStyle={{ fontSize: 11 }}
                   />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#0a0908',
-                      borderColor: '#eae0d5',
-                      color: '#eae0d5',
-                      fontSize: 11,
-                    }}
-                  />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -266,10 +266,10 @@ function App() {
               </div>
               <div className="space-y-1">
                 <p className="font-semibold text-panel">Performance</p>
-                <p>Accuracy: {aiStatus.accuracy.toFixed(2)}%</p>
-                <p>Precision: {aiStatus.precision.toFixed(2)}%</p>
-                <p>Recall: {aiStatus.recall.toFixed(2)}%</p>
-                <p>F1: {aiStatus.f1.toFixed(2)}%</p>
+                <p>Accuracy: {(aiStatus.accuracy * 100).toFixed(2)}%</p>
+                <p>Precision: {(aiStatus.precision * 100).toFixed(2)}%</p>
+                <p>Recall: {(aiStatus.recall * 100).toFixed(2)}%</p>
+                <p>F1: {(aiStatus.f1 * 100).toFixed(2)}%</p>
               </div>
             </div>
           ) : (
@@ -288,7 +288,7 @@ function App() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={byHour}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(234,224,213,0.25)" />
-                  <XAxis dataKey="hour" tick={{ fontSize: 10, fill: '#eae0d5' }} />
+                  <XAxis dataKey="hour" tick={{ fontSize: 10, fill: '#eae0d5' }} tickFormatter={formatHourString} />
                   <YAxis tick={{ fontSize: 10, fill: '#eae0d5' }} />
                   <Tooltip
                     contentStyle={{
@@ -297,9 +297,10 @@ function App() {
                       color: '#eae0d5',
                       fontSize: 11,
                     }}
+                    itemStyle={{ color: '#eae0d5' }}
+                    labelFormatter={formatHourString}
                   />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="count" name="Malicious attempts">
+                  <Bar dataKey="count" name="Count">
                     {byHour.map((_, index) => (
                       <Cell key={`hour-cell-${index}`} fill={ATTACK_COLORS[index % ATTACK_COLORS.length]} />
                     ))}

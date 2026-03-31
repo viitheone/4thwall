@@ -153,7 +153,19 @@ def main():
             best_f1 = metrics["f1"]
             model.save_pretrained(output_dir)
             tokenizer.save_pretrained(output_dir)
-            print(f"  -> Saved best model (F1={best_f1:.4f}) to {output_dir}")
+            
+            import json
+            cm = metrics["confusion_matrix"]
+            acc = (cm[0][0] + cm[1][1]) / max(sum(sum(row) for row in cm), 1)
+            metrics_dict = {
+                "accuracy": acc,
+                "precision": metrics["precision"],
+                "recall": metrics["recall"],
+                "f1": metrics["f1"]
+            }
+            with open(os.path.join(output_dir, "metrics.json"), "w") as f:
+                json.dump(metrics_dict, f)
+            print(f"  -> Saved best model (F1={best_f1:.4f}) and metrics to {output_dir}")
 
     print("\nTraining complete.")
 
