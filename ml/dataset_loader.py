@@ -1,9 +1,3 @@
-"""
-Dataset loader for WAF training.
-Expects CSV with: method, path/url, query/args, status, user_agent, request_time, label.
-Also supports alternate column names: target (benign/malicious), action→method, resource→path.
-"""
-
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
@@ -11,12 +5,6 @@ from ml.preprocess import serialize_request
 
 
 def _normalize_row_to_request(row):
-    """
-    Map CSV columns to expected request fields for serialize_request.
-    Supports standard WAF columns and activity/audit log columns:
-    action→method, resource→path, protocol+anomaly_score+anomaly_bin→query,
-    access_result→status, device_type+location→user_agent, session_duration→request_time.
-    """
     r = dict(row)
     if "method" not in r and "action" in r:
         r["method"] = r["action"]
@@ -48,7 +36,6 @@ def _normalize_row_to_request(row):
 
 
 def _labels_to_int(df, label_col):
-    """Convert label column to 0/1. Supports 'label' (0/1) or 'target' (benign/malicious)."""
     series = df[label_col].astype(str).str.strip().str.lower()
     if all(v in ("0", "1") for v in series.unique()):
         return df[label_col].astype(int).tolist()
@@ -56,11 +43,6 @@ def _labels_to_int(df, label_col):
 
 
 def load_and_preprocess_dataset(csv_path: str):
-    """
-    Read CSV, drop rows with missing labels, serialize each row.
-    Label column: 'label' (0/1) or 'target' (benign=0, malicious=1).
-    Returns (texts list, labels list).
-    """
     df = pd.read_csv(csv_path)
     label_col = "label" if "label" in df.columns else "target"
     if label_col not in df.columns:
@@ -81,10 +63,7 @@ def load_and_preprocess_dataset(csv_path: str):
 
 
 def create_train_val_split(texts, labels, split_ratio=0.8):
-    """
-    Stratified split.
-    Returns train_texts, val_texts, train_labels, val_labels.
-    """
+
     (
         train_texts,
         val_texts,

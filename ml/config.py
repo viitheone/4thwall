@@ -1,5 +1,3 @@
-"""WAF ML configuration - fixed parameters."""
-
 MODEL_NAME = "distilbert-base-uncased"
 MAX_LENGTH = 512
 BATCH_SIZE = 16

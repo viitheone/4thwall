@@ -1,9 +1,3 @@
-"""
-Training script for WAF classifier.
-Loads dataset, tokenizes, fine-tunes DistilBERT, saves best model by validation F1.
-No online training or model updates after saving.
-"""
-
 import argparse
 import contextlib
 import io
@@ -34,7 +28,6 @@ from ml.dataset_loader import create_train_val_split, load_and_preprocess_datase
 
 
 def compute_metrics(preds, labels):
-    """Precision, recall, F1, confusion matrix."""
     preds_np = np.argmax(preds, axis=1)
     precision = precision_score(labels, preds_np, zero_division=0)
     recall = recall_score(labels, preds_np, zero_division=0)

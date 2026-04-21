@@ -1,8 +1,3 @@
-"""
-Inference module for WAF classifier.
-Load model once at init; CPU-compatible. No model modification.
-"""
-
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
@@ -11,7 +6,7 @@ from ml.config import MAX_LENGTH
 
 class WAFClassifier:
     def __init__(self, model_path: str):
-        """Load trained model and tokenizer."""
+
         self.device = torch.device("cpu")
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_path)
@@ -29,16 +24,6 @@ class WAFClassifier:
                 pass
 
     def predict(self, request_text: str) -> dict:
-        """
-        Args:
-            request_text: Serialized request string
-        Returns:
-            {
-                'score': float (0-1),
-                'label': 'benign' or 'malicious',
-                'confidence': float
-            }
-        """
         out = self.predict_batch([request_text])
         return out[0]
 

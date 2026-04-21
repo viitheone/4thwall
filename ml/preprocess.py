@@ -1,13 +1,7 @@
-"""
-Request serialization and text preprocessing for WAF.
-Single canonical format used in both training and inference.
-"""
-
 import re
 
 
 def clean_text(text: str) -> str:
-    """Remove special chars, normalize spacing."""
     if text is None or (isinstance(text, float) and str(text) == "nan"):
         return ""
     s = str(text).strip().lower()
@@ -17,7 +11,6 @@ def clean_text(text: str) -> str:
 
 
 def truncate_field(text: str, max_len: int = 200) -> str:
-    """Truncate long strings."""
     if text is None or (isinstance(text, float) and str(text) == "nan"):
         return "NA"
     s = str(text).strip()
@@ -27,7 +20,6 @@ def truncate_field(text: str, max_len: int = 200) -> str:
 
 
 def _get_field(row, *keys, default="NA", max_len=200):
-    """Get first available key from row, clean and truncate."""
     for key in keys:
         if key in row:
             val = row[key]
@@ -39,23 +31,6 @@ def _get_field(row, *keys, default="NA", max_len=200):
 
 
 def serialize_request(row) -> str:
-    """
-    Convert a row (dict or pandas Series) into EXACTLY this format:
-
-    METHOD=<method>
-    PATH=<path>
-    QUERY=<query>
-    STATUS=<status>
-    UA=<user_agent>
-    TIME=<request_time>
-
-    Rules:
-    - Always same order
-    - Missing values → "NA"
-    - Lowercase everything
-    - Truncate strings > 200 chars
-    - No extra whitespace
-    """
     if hasattr(row, "to_dict"):
         row = row.to_dict()
     row = dict(row)

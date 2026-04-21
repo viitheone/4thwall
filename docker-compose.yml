@@ -1,6 +1,3 @@
-# 4thwall WAF - Docker Compose
-# Nginx (WAF) + FastAPI + Dashboard frontend + optional DVWA
-
 services:
   api:
     build:
@@ -11,9 +8,10 @@ services:
     environment:
       - MODEL_PATH=./models/waf_model
       - DECISION_LOG=/app/logs/decision_log.json
+      - DVWA_URL=http://dvwa:80
     volumes:
       - ./models:/app/models:ro
-      - ./logs:/app/logs:ro
+      - ./logs:/app/logs
     healthcheck:
       test:
         [
@@ -28,23 +26,7 @@ services:
       start_period: 180s
     restart: unless-stopped
 
-  # Tails logs/access.log, calls /score, appends logs/decision_log.json (dashboard reads this).
-  log-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
-    command: ["python", "-u", "docker_log_worker.py"]
-    environment:
-      NGINX_ACCESS_LOG: /app/logs/access.log
-      DECISION_LOG: /app/logs/decision_log.json
-      WORKER_OFFSET_FILE: /app/logs/.waf_log_worker_offset
-      WAF_API_URL: http://api:8000
-    volumes:
-      - ./logs:/app/logs
-    depends_on:
-      api:
-        condition: service_healthy
-    restart: unless-stopped
+
 
   frontend:
     build:
@@ -64,8 +46,8 @@ services:
       # CRS nginx listens on 8080 inside the container (unprivileged image default), not 80.
       - "80:8080"
     environment:
-      # Reverse-proxy to DVWA; ModSecurity inspects traffic before it reaches the backend.
-      - BACKEND=http://dvwa:80
+      # Reverse-proxy to API, which evaluates ML score inline before passing to DVWA
+      - BACKEND=http://api:8000
       # Explicit blocking mode (default is On; set DetectionOnly if you only want logs).
       - MODSEC_RULE_ENGINE=On
       # Slightly easier to trigger blocks on obvious attack probes (optional; raise for production).

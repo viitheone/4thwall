@@ -1,5 +1,3 @@
-"""Pydantic schemas for WAF API."""
-
 from pydantic import BaseModel, Field
 
 
