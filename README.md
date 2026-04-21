@@ -46,8 +46,8 @@ A hybrid Web Application Firewall that combines **ModSecurity** (rule-based) wit
 ## Prerequisites
 
 - Python 3.10+
-- Nginx (optional, for full pipeline)
-- ModSecurity (optional)
+- Nginx
+- ModSecurity
 
 ## Installation
 
@@ -81,24 +81,6 @@ A hybrid Web Application Firewall that combines **ModSecurity** (rule-based) wit
    Optional: `--output_dir ./models/waf_model` and `--epochs 3`.
 
 3. Model and tokenizer are saved under `MODEL_SAVE_PATH` (default `./models/waf_model`). Best model is chosen by validation F1.
-
-## Running the System
-
-1. Start the API (after training):
-   ```bash
-   set MODEL_PATH=./models/waf_model
-   uvicorn api.main:app --host 0.0.0.0 --port 8000
-   ```
-
-2. Health check:
-   ```bash
-   curl http://localhost:8000/health
-   ```
-
-3. Score a request (body = serialized request string):
-   ```bash
-   curl -X POST http://localhost:8000/score -H "Content-Type: application/json" -d "{\"request_text\": \"METHOD=get\nPATH=/login\nQUERY=id=1\nSTATUS=200\nUA=curl\nTIME=0.01\"}"
-   ```
 
 ## Running with Docker
 
