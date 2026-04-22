@@ -3,6 +3,7 @@ import os
 
 import json
 import time
+import asyncio
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -33,9 +34,78 @@ classifier: WAFClassifier | None = None
 
 app.include_router(dashboard_router)
 
+RETRAIN_LOG_PATH = os.environ.get("RETRAIN_LOG", "logs/retrain_log.json")
+ACCESS_LOG_PATH = os.environ.get("ACCESS_LOG_PATH", "logs/access.log")
+OFFSET_PATH = os.environ.get("OFFSET_PATH", "logs/.waf_log_worker_offset")
+
+async def modsec_false_negative_sync():
+    """Background task to tail Nginx access.log for ModSecurity false negatives."""
+    while True:
+        await asyncio.sleep(60)
+        if classifier is None or not os.path.exists(ACCESS_LOG_PATH):
+            continue
+        try:
+            offset = 0
+            if os.path.exists(OFFSET_PATH):
+                with open(OFFSET_PATH, "r") as f:
+                    offset = int(f.read().strip() or "0")
+            file_size = os.path.getsize(ACCESS_LOG_PATH)
+            if file_size < offset:
+                offset = 0
+            if file_size == offset:
+                continue
+            
+            os.makedirs(os.path.dirname(OFFSET_PATH), exist_ok=True)
+            with open(ACCESS_LOG_PATH, "r", encoding="utf-8", errors="ignore") as f:
+                f.seek(offset)
+                lines = f.readlines()
+                new_offset = f.tell()
+                
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    if data.get("status") == 403 and data.get("request_time", 1.0) < 0.1:
+                        query = data.get("query", "")
+                        uri = data.get("path", "/")
+                        if query: uri += "?" + query
+                        
+                        row = {
+                            "method": data.get("method", "GET"),
+                            "path": uri,
+                            "status": 403,
+                            "user_agent": data.get("user_agent", ""),
+                            "request_time": 0.0
+                        }
+                        req_text = serialize_request(row)
+                        res = classifier.predict(req_text)
+                        
+                        if res["score"] < 0.6:
+                            os.makedirs(os.path.dirname(RETRAIN_LOG_PATH), exist_ok=True)
+                            with open(RETRAIN_LOG_PATH, "a", encoding="utf-8") as rf:
+                                rf.write(json.dumps({
+                                    "request_text": req_text,
+                                    "ml_score": res["score"],
+                                    "corrected_label": "malicious",
+                                    "source": "modsec_sync",
+                                    "timestamp": data.get("time", ""),
+                                    "action_taken": "BLOCK"
+                                }) + "\n")
+                except json.JSONDecodeError:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error processing access log line: {e}")
+                    
+            with open(OFFSET_PATH, "w") as f:
+                f.write(str(new_offset))
+        except Exception as e:
+            logger.error(f"Error in modsec sync task: {e}")
+
 
 @app.on_event("startup")
-def startup():
+async def startup():
     global classifier
     model_path = os.environ.get("MODEL_PATH", "./models/waf_model")
     if os.path.exists(model_path):
@@ -45,6 +115,8 @@ def startup():
         classifier = None
         logger.warning("Model path %s not found; /score endpoints will return 503", model_path)
     app.state.waf_classifier = classifier
+    
+    asyncio.create_task(modsec_false_negative_sync())
 
 
 @app.get("/health")

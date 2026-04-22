@@ -9,6 +9,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from fastapi import APIRouter, Request
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -161,3 +162,42 @@ def get_ai_status(request: Request):
         "f1": metrics["f1"] if metrics else 0.0,
         "lastUpdated": "2026-02-01T00:00:00Z",
     }
+
+
+class FlagFPRequest(BaseModel):
+    id: str
+    timestamp: str
+    method: str
+    path: str
+    statusCode: int
+
+@router.post("/flag-fp")
+def flag_false_positive(req: FlagFPRequest, request: Request):
+    """Flag an entry as a False Positive, adding it to retrain logs."""
+    RETRAIN_LOG_PATH = os.environ.get("RETRAIN_LOG", "logs/retrain_log.json")
+    
+    entries = _read_decision_log(max_lines=500)
+    matched_entry = None
+    for e in reversed(entries):
+        if e.get("timestamp") == req.timestamp:
+            matched_entry = e
+            break
+            
+    if not matched_entry:
+        row = {"method": req.method, "path": req.path, "status": req.statusCode, "user_agent": "", "request_time": 0.0}
+        req_text = "\n".join(f"{k.upper()}={v}" for k, v in row.items())
+    else:
+        req_text = matched_entry.get("request_text", "")
+        
+    os.makedirs(os.path.dirname(RETRAIN_LOG_PATH), exist_ok=True)
+    with open(RETRAIN_LOG_PATH, "a", encoding="utf-8") as f:
+        f.write(json.dumps({
+            "request_text": req_text,
+            "ml_score": matched_entry.get("ml_score", 1.0) if matched_entry else 1.0,
+            "corrected_label": "benign",
+            "source": "ui_flag",
+            "timestamp": req.timestamp,
+            "action_taken": matched_entry.get("action", "BLOCK") if matched_entry else "BLOCK"
+        }) + "\n")
+        
+    return {"status": "success"}

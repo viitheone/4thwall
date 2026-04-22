@@ -79,3 +79,14 @@ export async function fetchAiModelStatus(): Promise<AiModelStatus> {
   return data;
 }
 
+export async function flagFalsePositive(entry: LiveTrafficEntry): Promise<{ status: string }> {
+  const { data } = await apiClient.post<{ status: string }>('/dashboard/flag-fp', {
+    id: entry.id,
+    timestamp: entry.timestamp,
+    method: entry.method,
+    path: entry.path,
+    statusCode: entry.statusCode
+  });
+  return data;
+}
+
